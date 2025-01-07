@@ -9,7 +9,7 @@ sys.path.insert(1, os.path.abspath("."))
 from lib.defs import AX, npdarr, npiarr
 
 
-def gaussian_kernel(sidelen: int = 5, sigma: float = 3):
+def gaussian_kernel(sidelen: int = 5, sigma: float = 3) -> npdarr:
     """Generate a 2D Gaussian kernel."""
     gkern1d = gaussian(sidelen, std=sigma).reshape(sidelen, 1)
     return np.outer(gkern1d, gkern1d)
@@ -20,13 +20,16 @@ def add_gaussian(
     center: npiarr,
     sidelen: int,
     amplitude: float = 1.0,
+    sigma: float = 1.0,
 ):
     """Add a gaussian kernel to a 2D matrix at a specified position."""
     ll_idx = center - sidelen
     rh_idx = center + sidelen + 1
     mat[
         ll_idx[AX.X] : rh_idx[AX.X], ll_idx[AX.Y] : rh_idx[AX.Y]
-    ] += amplitude * gaussian_kernel(sidelen=sidelen * 2 + 1, sigma=np.sqrt(sidelen))
+    ] += amplitude * gaussian_kernel(
+        sidelen=sidelen * 2 + 1, sigma=np.sqrt(sidelen) * sigma
+    )
     return mat
 
 

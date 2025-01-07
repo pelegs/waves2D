@@ -4,6 +4,7 @@ import numpy as np
 
 # Types (for hints)
 npdarr = np.typing.NDArray[np.float64]
+npfarr = np.typing.NDArray[np.float32]
 npiarr = np.typing.NDArray[np.int8]
 
 
