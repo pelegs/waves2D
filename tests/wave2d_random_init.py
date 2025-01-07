@@ -1,14 +1,17 @@
+import math
+import random
 import time
 
 import numpy as np
 import pygame
+from scipy.ndimage import gaussian_filter
 from scipy.signal import convolve
 from scipy.signal.windows import gaussian
 
 hs = 1  # spatial step width
 ts = 1  # time step width
-dimx = 350  # width of the simulation domain
-dimy = 350  # height of the simulation domain
+dimx = 500  # width of the simulation domain
+dimy = 500  # height of the simulation domain
 cellsize = 1  # display size of a cell in pixel
 
 laplace_2 = np.array(
@@ -76,14 +79,11 @@ def gkern(kernlen: int = 5, std: float = 3):
     return gkern2d
 
 
-def gauss_peak(center, amplitude: float = 1.0, rad: int = 10, sigma: float = 3):
-    return amplitude / (sigma * np.sqrt(2 * np.pi)) * gkern(kernlen=2 * rad, std=sigma)
-
-
 def create_arrays():
     global velocity
     global tau
     global kappa
+    global gauss_peak
     global u
 
     # The three dimensional simulation grid
@@ -98,36 +98,32 @@ def create_arrays():
     # A field containing the factor for the Laplace Operator that combines Velocity and Grid Constants for the Boundary Condition
     kappa = np.zeros((dimx, dimy))
 
+    # Create a template for a gauss peak to use as a rain drop model
+    sigma = 2.4
+    gauss_peak = 300 / (sigma * np.sqrt(2 * np.pi)) * gkern(kernlen=10, std=sigma)
 
-def set_initial_conditions(u):
+
+def set_initial_conditions():
     global velocity
     global tau
     global kappa
+    global gauss_peak
 
-    velocity[:, :] = 0.3
+    velocity[:, :] = 0.5
 
     # compute tau and kappa from the velocity field
     tau = ((velocity * ts) / hs) ** 2
     kappa = ts * velocity / hs
 
     # Place a single gaussian peak at the center of the simulation
-    # u[:2] = put_gauss_peak(u[:2], np.array([dimx // 2, dimy // 2]), 50)
+    u[:, :] = np.random.normal(0, 1000, size=(dimx, dimy))
+    u[:, :] = gaussian_filter(u, sigma=10)
+    return u
 
 
-def update(u: any, method: int, tick):
+def update(u: any, method: int):
     u[2] = u[1]
     u[1] = u[0]
-
-    amp = 5
-    f = 5
-    g_rad = 5
-    osc = amp * np.sin(np.radians(tick * ts) * f)
-    pos = np.array(pygame.mouse.get_pos()).astype(int)
-    if not (g_rad < pos[0] < dimx - g_rad and g_rad < pos[1] < dimy - g_rad):
-        return
-    u[
-        :2, pos[0] - g_rad : pos[0] + g_rad, pos[1] - g_rad : pos[1] + g_rad
-    ] += gauss_peak(pos, amplitude=osc, rad=g_rad)
 
     if method == 0:
         boundary_size = 1
@@ -260,13 +256,37 @@ def update_boundary(u, sz) -> None:
     )
 
 
-def put_gauss_peak(u, pos, height):
+def put_gauss_peak(u, x: int, y: int, height):
     """Place a gauss shaped peak into the simulation domain.
 
     This function will put a gauss shaped peak at position x,y of the
     simulation domain.
     """
-    return u + height * gauss_peak(center=pos, amplitude=height)
+    w, h = gauss_peak.shape
+    w = int(w / 2)
+    h = int(h / 2)
+
+    use_multipole = False
+    if use_multipole:
+        # Multipole
+        dist = 3
+        u[0:2, x - w - dist : x + w - dist, y - h : y + h] += height * gauss_peak
+        u[0:2, x - w : x + w, y - h + dist : y + h + dist] -= height * gauss_peak
+        u[0:2, x - w + dist : x + w + dist, y - h : y + h] += height * gauss_peak
+        u[0:2, x - w : x + w, y - h - dist : y + h - dist] -= height * gauss_peak
+    else:
+        # simple peak
+        u[0:2, x - w : x + w, y - h : y + h] += height * gauss_peak
+
+
+def place_raindrops(u):
+    if random.random() < 0.003:
+        w, h = gauss_peak.shape
+        x = int(random.randrange(w + w // 2, dimx - h - h // 2))
+        y = int(random.randrange(w + w // 2, dimy - h - h // 2))
+
+        height = 2
+        put_gauss_peak(u, x, y, height)
 
 
 def draw_waves(display, u, data, offset):
@@ -324,7 +344,7 @@ def main():
     pygame.display.set_caption("Solving the 2d Wave Equation")
 
     create_arrays()
-    set_initial_conditions(u)
+    u = set_initial_conditions()
 
     image1data = np.zeros((dimx, dimy, 3), dtype=np.uint8)
 
@@ -347,7 +367,7 @@ def main():
             start_time = time.time()
             last_tick = tick
 
-        update(u, 3, tick)
+        update(u, 3)
         draw_waves(display, u, image1data, (0, 0))
         draw_text(display, fps, tick)
 
