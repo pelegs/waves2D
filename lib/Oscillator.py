@@ -6,7 +6,7 @@ import numpy as np
 
 sys.path.insert(1, os.path.abspath("."))
 from lib.defs import AX, npdarr, npiarr
-from lib.gaussian import add_gaussian, gaussian_kernel
+from lib.gaussian import add_gaussian
 
 periodics = {
     "sin": lambda A, f, t: A * np.sin(2 * np.pi * f * t),
@@ -56,19 +56,21 @@ class Oscillator:
 
 
 if __name__ == "__main__":
+    from random import choice
+
     import matplotlib.pyplot as plt
     from matplotlib.animation import FuncAnimation
 
     A: float = 10.0
     side: int = 500
 
-    num_oscillators: int = 100
+    num_oscillators: int = 20
     osc_list: list[Oscillator] = [
         Oscillator(
             sim_sides=side * np.ones(2, dtype=int),
             pos=np.random.randint(100, side - 100, size=2),
             sidelen=np.random.randint(10, 50),
-            type="sin",
+            type=choice(["sin", "cos"]),
             amplitude=np.random.uniform(0.1, 10.0),
             freq=np.random.uniform(1, 5 * np.pi),
         )
