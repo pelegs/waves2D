@@ -2,6 +2,7 @@ import os
 import sys
 
 import numpy as np
+from PIL import Image
 from scipy.signal import convolve
 from tqdm import tqdm
 
@@ -18,12 +19,13 @@ class Simulation:
         self,
         dimensions: npiarr,
         num_steps: int = 100,
-        laplacian: npdarr = laplace2d["h2"],
+        laplacian: npdarr = laplace2d["h4"],
         init_state: npdarr | float | None = None,
         velocities: npdarr | float | None = None,
         boundary_type: str = "absorbing",
     ) -> None:
         self.dimensions: npiarr = dimensions
+        self.width, self.height = dimensions
         self.num_steps: int = num_steps
         self.laplacian: npdarr = laplacian
         self.gap: int = (self.laplacian.shape[0] - 1) // 2
@@ -56,8 +58,28 @@ class Simulation:
     def load_init_state_from_file(self, filename: str) -> None:
         pass
 
-    def load_velocities_matrix_from_file(self, filename: str) -> None:
-        pass
+    def load_velocities_matrix_from_file(
+        self, filename: str, vmin: float = 0.0, vmax: float = 1.0
+    ) -> None:
+        try:
+            img = Image.open(filename).convert("L")
+        except OSError as err:
+            raise err
+        width, height = img.size
+        if width != self.width or height != self.height:
+            raise ValueError(
+                f"Velocity matrix should have exact same dimensions as simulation area: ({self.width},{self.height}) != ({width},{height})"
+            )
+
+        # Set up array from image
+        arr: npdarr = (
+            np.array(img.getdata(), dtype=np.uint8)
+            .reshape((self.width, self.height))
+            .astype(float)
+        )
+
+        # Adjust array to fit given paramters
+        self.velocities = arr / 256 * (vmax - vmin) + vmin
 
     def calc_step(self) -> None:
         self.data_array[
@@ -102,26 +124,29 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from matplotlib.animation import FuncAnimation
 
-    dims: npiarr = np.array([300, 300])
+    dims: npiarr = np.array([500, 500])
     init: npdarr = np.zeros((dims[0], dims[1]))
-    init = add_gaussian(init, center=dims // 2, sidelen=50, amplitude=20)
-    sim = Simulation(dimensions=dims, num_steps=500, init_state=init, velocities=0.35)
+    init = add_gaussian(init, center=np.array([50, 250]), sidelen=5, amplitude=10)
+    sim = Simulation(dimensions=dims, num_steps=1500, init_state=init, velocities=None)
+    sim.load_velocities_matrix_from_file("velocity_maps/double_slit_test_2.png")
     sim.run()
 
     def update_anim(step):
         heatmap.set_data(sim.data_array[step])
-        return [heatmap]
+        frame_count.set_text(f"Frame: {step}/{sim.num_steps}")
+        return [heatmap, frame_count]
 
     fig, ax = plt.subplots()
     ax.set_xticks([])
     ax.set_yticks([])
     heatmap = ax.imshow(
         sim.init_state,
-        cmap="jet",
+        cmap="seismic",
         interpolation="nearest",
-        vmin=-10,
-        vmax=10,
+        vmin=-1,
+        vmax=1,
     )
+    frame_count = ax.annotate("Frame: 0/0", (10, 10))
 
     anim = FuncAnimation(
         fig=fig, func=update_anim, frames=sim.num_steps - 2, interval=1, blit=True
